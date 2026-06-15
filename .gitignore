@@ -1,0 +1,63 @@
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.cover
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Playwright artifacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/e2e/screenshots/
+
+# Storage contents (keep directory structure, ignore contents)
+storage/raw/*
+storage/audio/*
+storage/frames/*
+storage/clips/*
+storage/exports/*
+!storage/raw/.gitkeep
+!storage/audio/.gitkeep
+!storage/frames/.gitkeep
+!storage/clips/.gitkeep
+!storage/exports/.gitkeep
+
+# Model caches
+.cache/
+huggingface/
+torch_cache/
+sentence_transformers/
+
+# Docker
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

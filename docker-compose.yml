@@ -1,0 +1,138 @@
+services:
+
+  # -----------------------------------------------------------------------
+  # PostgreSQL 16 + pgvector
+  # -----------------------------------------------------------------------
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - suoranet
+
+  # -----------------------------------------------------------------------
+  # Redis 7
+  # -----------------------------------------------------------------------
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - suoranet
+
+  # -----------------------------------------------------------------------
+  # Backend (FastAPI + Uvicorn)
+  # -----------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Override with internal hostnames so the app reaches db/redis
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      STORAGE_ROOT: ${STORAGE_ROOT:-/storage}
+      HF_HOME: /model_cache/huggingface
+      TORCH_HOME: /model_cache/torch
+      XDG_CACHE_HOME: /model_cache/xdg
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage:/storage
+      - model_cache:/model_cache
+      # Mount scripts under WORKDIR so `python scripts/<name>.py` resolves
+      - ./scripts:/app/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - suoranet
+
+  # -----------------------------------------------------------------------
+  # RQ Worker (same image as backend)
+  # -----------------------------------------------------------------------
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      STORAGE_ROOT: ${STORAGE_ROOT:-/storage}
+      HF_HOME: /model_cache/huggingface
+      TORCH_HOME: /model_cache/torch
+      XDG_CACHE_HOME: /model_cache/xdg
+    # Run worker.py which is in the repo but needs to be available inside the container.
+    # We mount the worker directory and run it from there.
+    command: ["python", "/worker/worker.py"]
+    volumes:
+      - storage:/storage
+      - model_cache:/model_cache
+      - ./worker:/worker:ro
+      # Mount scripts under WORKDIR so `python scripts/<name>.py` resolves
+      - ./scripts:/app/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - suoranet
+
+  # -----------------------------------------------------------------------
+  # Frontend (Vite dev server)
+  # -----------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - suoranet
+
+# -----------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------
+volumes:
+  pgdata:
+  storage:
+  model_cache:
+
+# -----------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------
+networks:
+  suoranet:
+    driver: bridge
