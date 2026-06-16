@@ -1,15 +1,16 @@
 /**
- * Phase 0 — Scaffold E2E: health status page.
+ * Health + CORS regression E2E.
  *
- * Navigates to http://localhost:5173, waits for the backend health data to
- * render, and asserts that "Overall", "Database", and "Redis" rows all show
- * "ok" badges — proving CORS + cross-service wiring works from a real browser.
+ * Since Phase 1 the home route renders the Dashboard, with backend health
+ * surfaced as a fixed pill widget (bottom-right). This spec asserts that pill
+ * reaches "Backend ok" — proving the /health fetch + CORS + cross-service
+ * wiring still works from a real browser.
  */
 import { test, expect } from "@playwright/test";
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 
-test("health status page renders all services ok", async ({ page }) => {
+test("health pill reports backend ok with no CORS errors", async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on("console", (msg) => {
     if (msg.type() === "error") consoleErrors.push(msg.text());
@@ -17,27 +18,12 @@ test("health status page renders all services ok", async ({ page }) => {
 
   await page.goto(APP_URL);
 
-  // Wait for the status table to appear (fetch completes, not still loading)
-  await page.waitForSelector("table", { timeout: 15_000 });
-
-  // Assert the heading
+  // App heading renders
   await expect(page.getByRole("heading", { name: "SuoraFlow" })).toBeVisible();
 
-  // Assert all three rows show "ok"
-  const rows = page.locator("tbody tr");
-  await expect(rows).toHaveCount(3);
-
-  // Overall row
-  const overallBadge = rows.nth(0).locator("td").nth(1).locator("span");
-  await expect(overallBadge).toHaveText("ok");
-
-  // Database row
-  const dbBadge = rows.nth(1).locator("td").nth(1).locator("span");
-  await expect(dbBadge).toHaveText("ok");
-
-  // Redis row
-  const redisBadge = rows.nth(2).locator("td").nth(1).locator("span");
-  await expect(redisBadge).toHaveText("ok");
+  // The health pill resolves from "Checking..." to "Backend ok" once /health
+  // returns — this is the cross-service + CORS proof.
+  await expect(page.getByText("Backend ok")).toBeVisible({ timeout: 15_000 });
 
   // No CORS or other console errors
   const corsErrors = consoleErrors.filter(
@@ -45,6 +31,5 @@ test("health status page renders all services ok", async ({ page }) => {
   );
   expect(corsErrors, `CORS errors in console: ${corsErrors.join("; ")}`).toHaveLength(0);
 
-  // Screenshot for report
   await page.screenshot({ path: "e2e/screenshots/health-ok.png", fullPage: true });
 });

@@ -7,7 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
+
+# Import models so SQLModel.metadata registers them before create_all()
+import app.models  # noqa: F401
+
 from app.routes import health
+from app.routes import projects, assets
 
 
 @asynccontextmanager
@@ -36,6 +41,8 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router)
+    app.include_router(projects.router)
+    app.include_router(assets.router)
 
     return app
 

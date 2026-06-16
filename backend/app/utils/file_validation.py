@@ -32,11 +32,18 @@ def safe_asset_path(storage_root: str, project_id: str, asset_id: str, ext: str)
 
     The extension must already be validated/normalised by the caller.
     Never derived from uploaded filename.
+
+    Defense-in-depth: the resolved path is asserted to stay under
+    <storage_root>/raw before any directory is created, so even a malformed
+    project_id/asset_id cannot escape the storage root via path traversal.
     """
-    root = Path(storage_root)
-    dest_dir = root / "raw" / project_id
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    return dest_dir / f"{asset_id}{ext}"
+    root = Path(storage_root).resolve()
+    raw_root = root / "raw"
+    dest = (raw_root / project_id / f"{asset_id}{ext}").resolve()
+    if not dest.is_relative_to(raw_root):
+        raise ValueError("Resolved asset path escapes the storage root")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    return dest
 
 
 def validate_extension(filename: str) -> str:
