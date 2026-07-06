@@ -66,6 +66,23 @@ export interface Waveform {
   duration: number;
 }
 
+export interface SearchResult {
+  asset_id: string;
+  asset_filename: string;
+  media_type: string;
+  chunk_id: string;
+  text: string;
+  start: number;
+  end: number;
+  score: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResult[];
+  total: number;
+}
+
 export interface HealthData {
   status: string;
   db: string;
@@ -122,6 +139,12 @@ export const api = {
         body: form,
       });
     },
+    search: (id: string, query: string, limit = 10): Promise<SearchResponse> =>
+      request<SearchResponse>(`/api/projects/${id}/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, limit }),
+      }),
   },
 
   assets: {

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, Asset, Project } from "../lib/api";
 import StatusBadge, { isProcessing } from "../components/StatusBadge";
+import SearchPanel from "../components/SearchPanel";
 
 // Extensions mirrored from backend allow-list
 const ALLOWED_EXTENSIONS =
@@ -206,6 +207,13 @@ export default function ProjectPage({ projectId, onBack, onSelectAsset }: Projec
             {error}
           </div>
         )}
+
+        {/* Semantic search */}
+        <SearchPanel
+          projectId={projectId}
+          hasReadyAssets={assets.some((a) => a.status === "ready")}
+          onOpenResult={(assetId, t) => onSelectAsset(assetId, t)}
+        />
 
         {/* Upload section */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">

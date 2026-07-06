@@ -4,7 +4,8 @@ from fastapi import APIRouter, UploadFile, File
 from app.database import SessionDep
 from app.schemas.asset import AssetRead
 from app.schemas.project import ProjectCreate, ProjectList, ProjectRead
-from app.services import asset_service, project_service
+from app.schemas.search import SearchRequest, SearchResponse
+from app.services import asset_service, project_service, search_service
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -43,3 +44,7 @@ async def upload_asset(
 def list_assets(project_id: str, session: SessionDep) -> list[AssetRead]:
     return asset_service.list_assets(session, project_id)
 
+
+@router.post("/{project_id}/search", response_model=SearchResponse)
+def search(project_id: str, data: SearchRequest, session: SessionDep) -> SearchResponse:
+    return search_service.search_project(session, project_id, data)
