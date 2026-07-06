@@ -12,6 +12,11 @@ model downloads.
 VAD → ASR → speaker diarization → chunking → embeddings → vector search → rough cut
 ```
 
+![SuoraFlow demo — semantic search over footage, timeline building, waveform + transcript](docs/demo.gif)
+
+*Searching the seeded demo project for “drone footage of the sunrise”, adding the
+ranked hit to a rough-cut timeline, then scrubbing the asset via its transcript.*
+
 ## Highlights
 
 - **Audio-understanding pipeline** — FFmpeg extraction to mono 16 kHz WAV,
