@@ -45,21 +45,29 @@ suoraflow/
     pyproject.toml
     app/
       main.py config.py database.py
-      models/        # SQLModel tables
+      models/        # SQLModel tables: Project, Asset, TranscriptSegment,
+                     #   TextEmbedding (pgvector), Clip, Timeline, TimelineItem
       schemas/       # request/response Pydantic models (separate from tables)
       routes/        # thin: validate -> call service -> return schema
-      services/      # all business logic lives here
+      services/      # all business logic: pipeline_service, search_service,
+                     #   timeline_service, ml_models (lazy model singletons)
       workers/       # queue.py (RQ setup), tasks.py (process_asset pipeline)
-      utils/         # ffmpeg.py, file_validation.py, security.py
+      utils/         # ffmpeg.py, waveform.py, file_validation.py, security.py
     tests/           # pytest, mirrors app/ structure
   worker/
     worker.py        # RQ worker entrypoint (imports app.workers.tasks)
   frontend/
     package.json vite.config.ts tsconfig.json
     src/{pages,components,lib}/
-  storage/           # raw/ audio/ frames/ clips/ exports/ (gitignored, volume-mounted)
+  fixtures/          # committed demo clip (demo_interview.wav) for seed_demo.py
+  storage/           # raw/ audio/ (gitignored, volume-mounted)
   scripts/           # init_db.py, seed_demo.py, warm_models.py
 ```
+
+Backend and frontend source are bind-mounted into the containers: backend code
+changes need `docker compose restart backend worker` (no rebuild); the frontend
+hot-reloads. Schema changes on existing volumes go through the idempotent
+`_MIGRATIONS` list in `app/database.py` (create_all never ALTERs).
 
 ## The processing pipeline (the heart of the project)
 
@@ -110,6 +118,14 @@ A phase is DONE only when ALL hold:
 - Type-check frontend: `docker compose run --rm frontend npx tsc --noEmit`
 - Warm models (first run): `docker compose run --rm worker python scripts/warm_models.py`
 - Seed demo project: `docker compose run --rm backend python scripts/seed_demo.py`
+
+## Build status
+
+Phases 0–5 are complete: scaffold, projects + safe upload, the full audio
+pipeline (probe → extract → VAD → transcribe → diarize → chunk → embed) with
+live status, semantic search over pgvector (HNSW), clips + rough-cut timeline
+with JSON/CSV export, and the seeded demo. Deferred stubs remain:
+`visual_search_service.py`, `rough_cut_service.py`.
 
 ## Working agreements
 

@@ -1,7 +1,34 @@
 # SuoraFlow
 
-AI-assisted footage search for editors. Local-first, multimodal media-processing pipeline:
-VAD → ASR → diarization → semantic search over your footage.
+**AI-assisted footage search for video editors.** Upload raw audio/video, let a
+local pipeline understand the speech in it, then search your footage by
+*meaning* — "the part where they talk about the budget" — and assemble the hits
+into an exportable rough-cut timeline.
+
+Everything runs locally with one command. No cloud APIs, no accounts, no manual
+model downloads.
+
+```
+VAD → ASR → speaker diarization → chunking → embeddings → vector search → rough cut
+```
+
+## Highlights
+
+- **Audio-understanding pipeline** — FFmpeg extraction to mono 16 kHz WAV,
+  Silero voice-activity detection (speech ratio + regions), faster-whisper
+  transcription with word-level timestamps, optional pyannote speaker
+  diarization, sentence-aware chunking, MiniLM embeddings in pgvector.
+- **Semantic search** — query text is embedded with the same model and ranked
+  by cosine similarity over an HNSW index; results are timestamped and
+  click-to-seek.
+- **Rough-cut timeline** — add search hits as clips, reorder, remove, and
+  export the cut as JSON or CSV (source file + in/out points per clip).
+- **Audio-first UI** — waveform rendered from server-computed peaks,
+  sample rate / channels / codec surfaced per asset, live pipeline status,
+  clickable transcript that follows playback.
+- **Local-first & reproducible** — one `docker compose up`; model weights are
+  cached in a named volume (first run downloads ~1 GB, every run after is
+  instant). Diarization is optional and degrades gracefully without a token.
 
 ## Quickstart
 
@@ -9,68 +36,158 @@ VAD → ASR → diarization → semantic search over your footage.
 git clone <repo-url> suoraflow
 cd suoraflow
 cp .env.example .env          # review defaults; change passwords for production
-docker compose up --build     # first run downloads ~1 GB of models — be patient
+docker compose up --build     # first run downloads models — be patient
 ```
 
-Open http://localhost:5173 — the frontend loads and displays the backend health status.
+Open **http://localhost:5173**. The API is at http://localhost:8000
+(interactive docs at `/docs`).
 
-API is at http://localhost:8000.
-
-## Stopping
+### Try the demo (recommended first step)
 
 ```bash
-docker compose down           # stop containers, keep volumes (data + model cache)
-docker compose down -v        # also remove volumes (full reset)
+docker compose run --rm worker python scripts/warm_models.py   # optional pre-warm
+docker compose run --rm backend python scripts/seed_demo.py
 ```
 
-> **Upgrading from an early build?** The `model_cache` and `storage` volumes are seeded
-> writable for the non-root container user only when first created. If you have volumes
-> from before that fix and hit a permission error while warming models, run
-> `docker compose down -v` once to recreate them.
+This seeds a demo project with a committed 31-second narration clip and runs it
+through the full pipeline. Then, in the UI:
+
+1. Open **Demo — Mountain Documentary** and watch the status badge move through
+   `probing → extracting audio → detecting speech → transcribing → indexing → ready`.
+2. Click the asset: player, waveform, audio metadata, and the transcript.
+3. Back on the project page, search **“drone footage of the sunrise”** or
+   **“discussion about the budget”** — results are semantic, not keyword.
+4. Click **+ Timeline** on a result, reorder clips, then **Export CSV**.
+
+## Architecture
+
+```
+Browser ── Vite/React SPA
+              │ REST
+              ▼
+          FastAPI backend ───────── PostgreSQL 16 + pgvector
+              │  enqueue                (assets, transcripts, embeddings)
+              ▼
+          Redis 7 + RQ
+              │
+              ▼
+          RQ worker ── FFmpeg/ffprobe → Silero VAD → faster-whisper
+                       → pyannote (optional) → sentence-transformers → pgvector
+```
+
+- **Statuses are persisted after every pipeline step**, so the UI polls and
+  shows live progress: `uploaded → probing → extracting_audio → vad →
+  transcribing → diarizing → chunking → embedding → ready` (or `failed` with a
+  short, safe error message).
+- **Uploads are never trusted**: UUID server-side filenames, extension
+  allow-list **and** ffprobe content validation, streamed to disk with a size
+  cap, media stored outside any web-served directory.
+- **Search** embeds the query with the same MiniLM model and ranks chunks by
+  pgvector cosine distance under an HNSW index.
+
+## Stack
+
+| Layer | Tech |
+|-------|------|
+| Frontend | Vite + React 18 + TypeScript + Tailwind |
+| API | FastAPI + SQLModel (Python 3.11) |
+| Database | PostgreSQL 16 + pgvector (HNSW) |
+| Queue | Redis 7 + RQ |
+| Media | FFmpeg / ffprobe |
+| ASR | faster-whisper (CPU, int8, `base` by default) |
+| VAD | Silero (bundled with faster-whisper) |
+| Diarization | pyannote.audio 3.1 — optional, gated on `HF_TOKEN` |
+| Embeddings | sentence-transformers `all-MiniLM-L6-v2` (384-dim) |
+
+## API surface
+
+```
+POST   /api/projects                         GET  /api/projects
+GET    /api/projects/{id}                    DELETE /api/projects/{id}
+POST   /api/projects/{id}/assets/upload      GET  /api/projects/{id}/assets
+GET    /api/assets/{id}                      GET  /api/assets/{id}/status
+GET    /api/assets/{id}/transcript           GET  /api/assets/{id}/waveform
+GET    /api/assets/{id}/media                DELETE /api/assets/{id}
+POST   /api/projects/{id}/search             # {query, limit} → ranked chunks
+POST   /api/projects/{id}/clips              GET  /api/projects/{id}/clips
+POST   /api/projects/{id}/timelines          GET  /api/projects/{id}/timelines
+GET    /api/timelines/{id}
+POST   /api/timelines/{id}/items             PATCH  /api/timelines/{id}/items/{item_id}
+DELETE /api/timelines/{id}/items/{item_id}   GET  /api/timelines/{id}/export?format=json|csv
+```
 
 ## Commands
 
 | Task | Command |
 |------|---------|
 | Run everything | `docker compose up --build` |
+| Seed the demo project | `docker compose run --rm backend python scripts/seed_demo.py` |
 | Backend tests | `docker compose run --rm backend pytest -q` |
 | Type-check frontend | `docker compose run --rm frontend npx tsc --noEmit` |
 | Pre-warm model cache | `docker compose run --rm worker python scripts/warm_models.py` |
-| Seed demo data | `docker compose run --rm backend python scripts/seed_demo.py` |
+| Stop (keep data) | `docker compose down` |
+| Full reset | `docker compose down -v` |
+
+Backend source is bind-mounted into the containers, so code changes only need a
+`docker compose restart backend worker` — no rebuild. The frontend hot-reloads.
 
 ## Environment variables
 
-See `.env.example` for the full list with documentation. Key variables:
+See `.env.example` for the full documented list. Key variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `POSTGRES_USER` | `suoraflow` | PostgreSQL user |
-| `POSTGRES_PASSWORD` | `suoraflow_secret` | PostgreSQL password |
-| `POSTGRES_DB` | `suoraflow` | Database name |
-| `DATABASE_URL` | *(internal)* | Full DSN for backend |
-| `REDIS_URL` | `redis://redis:6379/0` | Redis connection |
-| `FRONTEND_URL` | `http://localhost:5173` | Allowed CORS origin |
-| `VITE_API_URL` | `http://localhost:8000` | Backend URL for browser |
-| `STORAGE_ROOT` | `/storage` | Where media files live |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit |
-| `WHISPER_MODEL` | `base` | faster-whisper model size |
-| `HF_TOKEN` | *(empty)* | HuggingFace token; leave blank to skip diarization |
+| `WHISPER_MODEL` | `base` | faster-whisper size (`tiny`…`large-v3`) — bigger = better + slower |
+| `HF_TOKEN` | *(empty)* | HuggingFace token enabling pyannote speaker diarization; leave blank and all segments are labelled "Speaker 1" |
+| `FRONTEND_URL` | `http://localhost:5173` | Allowed CORS origin (never a wildcard) |
+| `STORAGE_ROOT` | `/storage` | Media + derived artifacts volume |
 
-## Ports
+### Enabling speaker diarization (optional)
 
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8000
-- **PostgreSQL**: 5432 (internal only)
-- **Redis**: 6379 (internal only)
+1. Accept the terms for [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1).
+2. Put your token in `.env` as `HF_TOKEN=...`.
+3. Install the extra dependency in the image: add `pyannote.audio==3.3.2` to
+   the backend Dockerfile pip install (it is intentionally not shipped by
+   default to keep the image lean), rebuild, and restart.
 
-## Architecture
+Without a token the pipeline still runs end to end — every segment is simply
+attributed to "Speaker 1".
+
+## Working with real footage
+
+- Every common container/codec that FFmpeg can read works: `.mp4 .mov .mkv
+  .avi .webm .mts .m2ts` video, `.mp3 .wav .aac .flac .ogg .m4a` audio.
+- Transcription runs at well above realtime on modern CPUs with the `base`
+  model. For an interview-heavy project, `WHISPER_MODEL=small` is a good
+  accuracy upgrade if you can spare the compute.
+- Video with no audio track (b-roll) is accepted and marked ready with an
+  empty transcript rather than failing.
+- Long footage is safe: jobs have a 3-hour timeout and the pipeline persists
+  progress step by step.
+
+## Repository layout
 
 ```
-Browser → Vite SPA → FastAPI backend → PostgreSQL + pgvector
-                                     → Redis (RQ queue)
-                                            ↓
-                                       RQ worker
-                                       (ffmpeg → faster-whisper → sentence-transformers)
+suoraflow/
+  docker-compose.yml     # db, redis, backend, worker, frontend
+  backend/
+    app/
+      models/            # SQLModel tables (Project, Asset, TranscriptSegment,
+                         #   TextEmbedding, Clip, Timeline, TimelineItem)
+      schemas/           # request/response models, separate from tables
+      routes/            # thin handlers
+      services/          # business logic (pipeline, search, timelines)
+      workers/           # RQ queue + process_asset orchestration
+      utils/             # ffmpeg, waveform peaks, upload validation
+    tests/               # pytest suite (runs in the container)
+  worker/                # RQ worker entrypoint
+  frontend/src/          # pages, components, typed API client
+  fixtures/              # committed demo clip used by seed_demo.py
+  scripts/               # warm_models.py, seed_demo.py
+  storage/               # (volume) raw/ + audio/ artifacts — never web-served
 ```
 
-Storage lives on a Docker volume at `STORAGE_ROOT` — never inside a web-served directory.
+## License
+
+[MIT](LICENSE)

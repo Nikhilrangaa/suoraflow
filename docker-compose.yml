@@ -61,6 +61,8 @@ services:
       - ./backend/tests:/app/tests:ro
       # Mount scripts under WORKDIR so `python scripts/<name>.py` resolves
       - ./scripts:/app/scripts:ro
+      # Demo fixture for scripts/seed_demo.py
+      - ./fixtures:/app/fixtures:ro
     depends_on:
       db:
         condition: service_healthy
