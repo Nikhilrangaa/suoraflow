@@ -12,7 +12,7 @@ from app.database import init_db
 import app.models  # noqa: F401
 
 from app.routes import health
-from app.routes import projects, assets
+from app.routes import projects, assets, timelines
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(projects.router)
     app.include_router(assets.router)
+    app.include_router(timelines.router)
 
     return app
 

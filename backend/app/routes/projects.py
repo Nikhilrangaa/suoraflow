@@ -5,7 +5,8 @@ from app.database import SessionDep
 from app.schemas.asset import AssetRead
 from app.schemas.project import ProjectCreate, ProjectList, ProjectRead
 from app.schemas.search import SearchRequest, SearchResponse
-from app.services import asset_service, project_service, search_service
+from app.schemas.timeline import ClipCreate, ClipRead, TimelineCreate, TimelineRead
+from app.services import asset_service, project_service, search_service, timeline_service
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -48,3 +49,25 @@ def list_assets(project_id: str, session: SessionDep) -> list[AssetRead]:
 @router.post("/{project_id}/search", response_model=SearchResponse)
 def search(project_id: str, data: SearchRequest, session: SessionDep) -> SearchResponse:
     return search_service.search_project(session, project_id, data)
+
+
+@router.post("/{project_id}/clips", response_model=ClipRead, status_code=201)
+def create_clip(project_id: str, data: ClipCreate, session: SessionDep) -> ClipRead:
+    return timeline_service.create_clip(session, project_id, data)
+
+
+@router.get("/{project_id}/clips", response_model=list[ClipRead])
+def list_clips(project_id: str, session: SessionDep) -> list[ClipRead]:
+    return timeline_service.list_clips(session, project_id)
+
+
+@router.post("/{project_id}/timelines", response_model=TimelineRead, status_code=201)
+def create_timeline(
+    project_id: str, data: TimelineCreate, session: SessionDep
+) -> TimelineRead:
+    return timeline_service.create_timeline(session, project_id, data)
+
+
+@router.get("/{project_id}/timelines", response_model=list[TimelineRead])
+def list_timelines(project_id: str, session: SessionDep) -> list[TimelineRead]:
+    return timeline_service.list_timelines(session, project_id)

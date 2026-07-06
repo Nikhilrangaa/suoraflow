@@ -83,6 +83,32 @@ export interface SearchResponse {
   total: number;
 }
 
+export interface Clip {
+  id: string;
+  project_id: string;
+  asset_id: string;
+  asset_filename: string;
+  start: number;
+  end: number;
+  label: string;
+  created_at: string;
+}
+
+export interface TimelineItem {
+  id: string;
+  position: number;
+  clip: Clip;
+}
+
+export interface Timeline {
+  id: string;
+  project_id: string;
+  name: string;
+  created_at: string;
+  items: TimelineItem[];
+  total_duration: number;
+}
+
 export interface HealthData {
   status: string;
   db: string;
@@ -145,6 +171,45 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, limit }),
       }),
+    createClip: (
+      id: string,
+      clip: { asset_id: string; start: number; end: number; label: string },
+    ): Promise<Clip> =>
+      request<Clip>(`/api/projects/${id}/clips`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(clip),
+      }),
+    listClips: (id: string): Promise<Clip[]> =>
+      request<Clip[]>(`/api/projects/${id}/clips`),
+    createTimeline: (id: string, name = "Rough Cut"): Promise<Timeline> =>
+      request<Timeline>(`/api/projects/${id}/timelines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      }),
+    listTimelines: (id: string): Promise<Timeline[]> =>
+      request<Timeline[]>(`/api/projects/${id}/timelines`),
+  },
+
+  timelines: {
+    get: (id: string): Promise<Timeline> => request<Timeline>(`/api/timelines/${id}`),
+    addItem: (id: string, clipId: string): Promise<Timeline> =>
+      request<Timeline>(`/api/timelines/${id}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clip_id: clipId }),
+      }),
+    moveItem: (id: string, itemId: string, position: number): Promise<Timeline> =>
+      request<Timeline>(`/api/timelines/${id}/items/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position }),
+      }),
+    removeItem: (id: string, itemId: string): Promise<void> =>
+      request<void>(`/api/timelines/${id}/items/${itemId}`, { method: "DELETE" }),
+    exportUrl: (id: string, format: "json" | "csv"): string =>
+      `${API_BASE}/api/timelines/${id}/export?format=${format}`,
   },
 
   assets: {
