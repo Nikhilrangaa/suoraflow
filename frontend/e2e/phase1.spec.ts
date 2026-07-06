@@ -33,6 +33,37 @@ async function screenshotPath(name: string): Promise<string> {
   return path.join(SCREENSHOTS_DIR, `${name}.png`);
 }
 
+/**
+ * Generate the upload fixtures so the suite is self-contained:
+ * - a minimal valid 1s 16kHz mono PCM WAV (silence)
+ * - a "fake mp4" that is plain text, to exercise server-side rejection
+ */
+function makeWavFixture(filePath: string): void {
+  const sampleRate = 16000;
+  const numSamples = sampleRate; // 1 second
+  const dataSize = numSamples * 2; // 16-bit mono
+  const buf = Buffer.alloc(44 + dataSize); // silence = zeroed data
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + dataSize, 4);
+  buf.write("WAVE", 8);
+  buf.write("fmt ", 12);
+  buf.writeUInt32LE(16, 16); // fmt chunk size
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28); // byte rate
+  buf.writeUInt16LE(2, 32); // block align
+  buf.writeUInt16LE(16, 34); // bits per sample
+  buf.write("data", 36);
+  buf.writeUInt32LE(dataSize, 40);
+  fs.writeFileSync(filePath, buf);
+}
+
+test.beforeAll(() => {
+  makeWavFixture(WAV_FIXTURE);
+  fs.writeFileSync(FAKE_MP4_FIXTURE, "This is not a video file, just text.");
+});
+
 test.beforeEach(async ({ page }) => {
   page.on("console", (msg) => {
     if (msg.type() === "error") allConsoleErrors.push(msg.text());
@@ -113,11 +144,15 @@ test("upload valid WAV shows status badge uploaded", async ({ page }) => {
   // Poll for the asset row rather than fixed sleep
   await expect(page.locator("text=qa_clip.wav")).toBeVisible({ timeout: 30_000 });
 
-  // Assert StatusBadge shows "uploaded"
+  // Assert a StatusBadge is present — with a live worker the asset moves
+  // from "queued" through the pipeline quickly, so accept any known state.
   const assetRow = page.locator("div.bg-white.rounded-xl.border").filter({ hasText: "qa_clip.wav" });
   await expect(assetRow).toBeVisible({ timeout: 10_000 });
-  const badge = assetRow.locator("span.inline-block.rounded");
-  await expect(badge).toHaveText("uploaded", { timeout: 10_000 });
+  const badge = assetRow.locator("span.rounded").first();
+  await expect(badge).toHaveText(
+    /queued|probing|extracting audio|detecting speech|transcribing|identifying speakers|chunking|indexing|ready/,
+    { timeout: 10_000 },
+  );
 
   // Assert media type shows "audio"
   await expect(assetRow).toContainText("audio");
