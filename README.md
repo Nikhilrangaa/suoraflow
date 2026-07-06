@@ -2,6 +2,11 @@
 
 [![CI](https://github.com/Nikhilrangaa/suoraflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Nikhilrangaa/suoraflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-6366f1.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-suoraflow.nikhilranga.dev-6366f1)](https://suoraflow.nikhilranga.dev)
+
+> **▶ Try it live: [suoraflow.nikhilranga.dev](https://suoraflow.nikhilranga.dev)** — hosted demo
+> (uploads capped at 100 MB; transcription runs on a small CPU instance, so processing is
+> slower than a local install).
 
 **AI-assisted footage search for video editors.** Upload raw audio/video, let a
 local pipeline understand the speech in it, then search your footage by
