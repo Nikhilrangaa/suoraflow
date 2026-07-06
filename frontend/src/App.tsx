@@ -7,10 +7,12 @@ import { useEffect, useState } from "react";
 import { api } from "./lib/api";
 import Dashboard from "./pages/Dashboard";
 import ProjectPage from "./pages/ProjectPage";
+import AssetPage from "./pages/AssetPage";
 
 type Route =
   | { page: "dashboard" }
-  | { page: "project"; id: string };
+  | { page: "project"; id: string }
+  | { page: "asset"; id: string; projectId: string; t?: number };
 
 function HealthIndicator() {
   const [status, setStatus] = useState<"loading" | "ok" | "degraded">("loading");
@@ -57,6 +59,16 @@ export default function App() {
         <ProjectPage
           projectId={route.id}
           onBack={() => navigate({ page: "dashboard" })}
+          onSelectAsset={(assetId, t) =>
+            navigate({ page: "asset", id: assetId, projectId: route.id, t })
+          }
+        />
+      )}
+      {route.page === "asset" && (
+        <AssetPage
+          assetId={route.id}
+          initialTime={route.t}
+          onBack={() => navigate({ page: "project", id: route.projectId })}
         />
       )}
       <HealthIndicator />

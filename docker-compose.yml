@@ -56,6 +56,9 @@ services:
     volumes:
       - storage:/storage
       - model_cache:/model_cache
+      # Bind-mount source so code changes apply on restart without a rebuild
+      - ./backend/app:/app/app:ro
+      - ./backend/tests:/app/tests:ro
       # Mount scripts under WORKDIR so `python scripts/<name>.py` resolves
       - ./scripts:/app/scripts:ro
     depends_on:
@@ -95,6 +98,8 @@ services:
       - storage:/storage
       - model_cache:/model_cache
       - ./worker:/worker:ro
+      # Bind-mount source so code changes apply on restart without a rebuild
+      - ./backend/app:/app/app:ro
       # Mount scripts under WORKDIR so `python scripts/<name>.py` resolves
       - ./scripts:/app/scripts:ro
     depends_on:
@@ -115,6 +120,11 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    volumes:
+      # Bind-mount source for hot reload; anonymous volume keeps the
+      # image's node_modules from being shadowed by the host directory
+      - ./frontend:/app
+      - /app/node_modules
     ports:
       - "5173:5173"
     depends_on:

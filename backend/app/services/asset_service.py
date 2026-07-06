@@ -1,4 +1,4 @@
-"""Asset service — safe upload, list, get, delete."""
+"""Asset service — safe upload, list, get, delete, transcript, media."""
 import json
 import logging
 import subprocess
@@ -12,7 +12,14 @@ from sqlmodel import Session, select
 from app.config import get_settings
 from app.models.asset import Asset
 from app.models.project import Project
-from app.schemas.asset import AssetRead, AssetStatus
+from app.models.transcript_segment import TranscriptSegment
+from app.schemas.asset import (
+    AssetRead,
+    AssetStatus,
+    TranscriptRead,
+    TranscriptSegmentRead,
+    WaveformRead,
+)
 from app.utils.ffmpeg import validate_media_type
 from app.utils.file_validation import (
     ALLOWED_EXTENSIONS,
@@ -44,6 +51,8 @@ def _asset_to_read(asset: Asset) -> AssetRead:
         width=asset.width,
         height=asset.height,
         fps=asset.fps,
+        speech_ratio=asset.speech_ratio,
+        vad_segment_count=asset.vad_segment_count,
         created_at=asset.created_at,
     )
 
@@ -139,8 +148,12 @@ def create_asset_from_upload(
     session.refresh(asset)
 
     # 7. Enqueue process_asset — non-fatal if this fails
+    # job_timeout must cover CPU transcription of long footage; RQ's 180s
+    # default would kill real-world jobs mid-transcription.
     try:
-        get_queue().enqueue("app.workers.tasks.process_asset", asset_id)
+        get_queue().enqueue(
+            "app.workers.tasks.process_asset", asset_id, job_timeout=3 * 60 * 60
+        )
     except Exception as exc:
         logger.warning(
             "Failed to enqueue process_asset for asset_id=%s: %s", asset_id, exc
@@ -182,13 +195,106 @@ def get_asset_status(session: Session, asset_id: str) -> AssetStatus:
 
 
 def delete_asset(session: Session, asset_id: str) -> None:
-    """Delete asset DB row and its file from disk."""
+    """Delete asset DB row, its file, and derived artifacts from disk."""
     asset = session.get(Asset, asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
-    _remove_file_safe(asset.stored_path)
+    remove_asset_files(asset)
     session.delete(asset)
     session.commit()
+
+
+def remove_asset_files(asset: Asset) -> None:
+    """Remove the stored media file and all derived artifacts for an asset."""
+    _remove_file_safe(asset.stored_path)
+    if asset.audio_path:
+        _remove_file_safe(asset.audio_path)
+    if asset.waveform_path:
+        _remove_file_safe(asset.waveform_path)
+
+
+def get_transcript(session: Session, asset_id: str) -> TranscriptRead:
+    """Return the ordered transcript segments for an asset."""
+    asset = session.get(Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    segments = session.exec(
+        select(TranscriptSegment)
+        .where(TranscriptSegment.asset_id == asset_id)
+        .order_by(TranscriptSegment.seg_index)  # type: ignore[arg-type]
+    ).all()
+    return TranscriptRead(
+        asset_id=asset_id,
+        status=asset.status,
+        segments=[
+            TranscriptSegmentRead(
+                id=s.id,
+                seg_index=s.seg_index,
+                start=s.start,
+                end=s.end,
+                text=s.text,
+                speaker=s.speaker,
+            )
+            for s in segments
+        ],
+    )
+
+
+def get_waveform(session: Session, asset_id: str) -> WaveformRead:
+    """Return waveform peaks computed by the pipeline."""
+    asset = session.get(Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if not asset.waveform_path:
+        raise HTTPException(
+            status_code=404, detail="Waveform not available for this asset yet"
+        )
+    try:
+        data = json.loads(Path(asset.waveform_path).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=404, detail="Waveform data could not be read"
+        ) from exc
+    return WaveformRead(
+        asset_id=asset_id,
+        peaks=data.get("peaks", []),
+        duration=data.get("duration", 0.0),
+    )
+
+
+# MIME types for the extension allow-list — used when serving media
+_CONTENT_TYPES = {
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".avi": "video/x-msvideo",
+    ".webm": "video/webm",
+    ".mts": "video/mp2t",
+    ".m2ts": "video/mp2t",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".aac": "audio/aac",
+    ".flac": "audio/flac",
+    ".ogg": "audio/ogg",
+    ".m4a": "audio/mp4",
+}
+
+
+def get_media_path(session: Session, asset_id: str) -> tuple[Path, str]:
+    """
+    Return (path, content_type) for an asset's stored media file.
+
+    The path is server-generated (UUID under STORAGE_ROOT) — never derived
+    from user input — and is verified to exist before serving.
+    """
+    asset = session.get(Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    path = Path(asset.stored_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Media file not found on disk")
+    content_type = _CONTENT_TYPES.get(asset.ext, "application/octet-stream")
+    return path, content_type
 
 
 def _remove_file_safe(path: "str | Path") -> None:

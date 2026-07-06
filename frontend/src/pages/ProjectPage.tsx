@@ -3,14 +3,18 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, Asset, Project } from "../lib/api";
+import StatusBadge, { isProcessing } from "../components/StatusBadge";
 
 // Extensions mirrored from backend allow-list
 const ALLOWED_EXTENSIONS =
   ".mp4,.mov,.mkv,.avi,.webm,.mts,.m2ts,.mp3,.wav,.aac,.flac,.ogg,.m4a";
 
+const POLL_MS = 2500;
+
 interface ProjectPageProps {
   projectId: string;
   onBack: () => void;
+  onSelectAsset: (assetId: string, t?: number) => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -19,28 +23,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const color: Record<string, string> = {
-    uploaded: "bg-blue-100 text-blue-800",
-    probing: "bg-yellow-100 text-yellow-800",
-    extracting_audio: "bg-yellow-100 text-yellow-800",
-    vad: "bg-yellow-100 text-yellow-800",
-    transcribing: "bg-yellow-100 text-yellow-800",
-    diarizing: "bg-yellow-100 text-yellow-800",
-    chunking: "bg-yellow-100 text-yellow-800",
-    embedding: "bg-yellow-100 text-yellow-800",
-    ready: "bg-green-100 text-green-800",
-    failed: "bg-red-100 text-red-800",
-  };
-  const cls = color[status] ?? "bg-gray-100 text-gray-800";
-  return (
-    <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${cls}`}>
-      {status}
-    </span>
-  );
-}
-
-export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
+export default function ProjectPage({ projectId, onBack, onSelectAsset }: ProjectPageProps) {
   const [project, setProject] = useState<Project | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loadingProject, setLoadingProject] = useState(true);
@@ -75,6 +58,21 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  // Poll asset list while any asset is still processing so status badges live-update
+  const anyProcessing = assets.some((a) => isProcessing(a.status));
+  useEffect(() => {
+    if (!anyProcessing) return;
+    const timer = setInterval(() => {
+      api.projects
+        .listAssets(projectId)
+        .then(setAssets)
+        .catch(() => {
+          /* transient poll errors are ignored */
+        });
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [anyProcessing, projectId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -256,9 +254,12 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               {assets.map((asset) => (
                 <div
                   key={asset.id}
-                  className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between"
+                  className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between hover:border-indigo-300 transition-colors"
                 >
-                  <div className="flex-1 min-w-0">
+                  <button
+                    onClick={() => onSelectAsset(asset.id)}
+                    className="flex-1 min-w-0 text-left"
+                  >
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-gray-900 text-sm truncate">
                         {asset.original_filename}
@@ -274,7 +275,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                     {asset.error_message && (
                       <p className="text-xs text-red-500 mt-0.5">{asset.error_message}</p>
                     )}
-                  </div>
+                  </button>
                   <button
                     onClick={() => setDeletingAssetId(asset.id)}
                     className="ml-4 text-gray-400 hover:text-red-500 transition-colors p-1 flex-shrink-0"

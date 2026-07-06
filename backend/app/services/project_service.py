@@ -1,7 +1,5 @@
 """Project service — all business logic for project CRUD."""
 import logging
-import os
-from pathlib import Path
 
 from fastapi import HTTPException
 from sqlmodel import Session, func, select
@@ -71,23 +69,13 @@ def delete_project(session: Session, project_id: str) -> None:
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Delete each asset's file from disk, then the DB row
+    # Delete each asset's files (media + derived artifacts), then the DB row
+    from app.services.asset_service import remove_asset_files
+
     assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
     for asset in assets:
-        _remove_file_safe(asset.stored_path)
+        remove_asset_files(asset)
         session.delete(asset)
 
     session.delete(project)
     session.commit()
-
-
-def _remove_file_safe(path_str: str) -> None:
-    """Remove a file from disk, tolerating missing files."""
-    if not path_str:
-        return
-    try:
-        p = Path(path_str)
-        if p.exists():
-            p.unlink()
-    except Exception as exc:
-        logger.warning("Could not remove file %s: %s", path_str, exc)

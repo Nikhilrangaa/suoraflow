@@ -34,7 +34,36 @@ export interface Asset {
   width: number | null;
   height: number | null;
   fps: number | null;
+  speech_ratio: number | null;
+  vad_segment_count: number | null;
   created_at: string;
+}
+
+export interface AssetStatus {
+  id: string;
+  status: string;
+  error_message: string | null;
+}
+
+export interface TranscriptSegment {
+  id: string;
+  seg_index: number;
+  start: number;
+  end: number;
+  text: string;
+  speaker: string;
+}
+
+export interface Transcript {
+  asset_id: string;
+  status: string;
+  segments: TranscriptSegment[];
+}
+
+export interface Waveform {
+  asset_id: string;
+  peaks: number[];
+  duration: number;
 }
 
 export interface HealthData {
@@ -97,6 +126,13 @@ export const api = {
 
   assets: {
     get: (id: string): Promise<Asset> => request<Asset>(`/api/assets/${id}`),
+    status: (id: string): Promise<AssetStatus> =>
+      request<AssetStatus>(`/api/assets/${id}/status`),
+    transcript: (id: string): Promise<Transcript> =>
+      request<Transcript>(`/api/assets/${id}/transcript`),
+    waveform: (id: string): Promise<Waveform> =>
+      request<Waveform>(`/api/assets/${id}/waveform`),
+    mediaUrl: (id: string): string => `${API_BASE}/api/assets/${id}/media`,
     delete: (id: string): Promise<void> =>
       request<void>(`/api/assets/${id}`, { method: "DELETE" }),
   },

@@ -42,3 +42,4 @@ async def upload_asset(
 @router.get("/{project_id}/assets", response_model=list[AssetRead])
 def list_assets(project_id: str, session: SessionDep) -> list[AssetRead]:
     return asset_service.list_assets(session, project_id)
+

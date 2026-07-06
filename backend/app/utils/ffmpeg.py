@@ -79,9 +79,29 @@ def validate_media_type(input_path: Path, expected_media_type: str) -> None:
 
 def extract_audio_wav(input_path: Path, output_path: Path) -> None:
     """
-    Extract audio from *input_path* to mono 16 kHz WAV at *output_path*.
+    Extract audio from *input_path* to mono 16 kHz 16-bit PCM WAV at *output_path*.
 
     Uses argument array only — never shell=True.
-    Phase 0 stub — raises NotImplementedError; implemented in Phase 2.
+    Raises subprocess.CalledProcessError on ffmpeg failure (caller converts to
+    a safe pipeline error; stderr is not propagated to users).
     """
-    raise NotImplementedError("extract_audio_wav: implemented in Phase 2")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg",
+        "-y",  # overwrite (idempotent re-runs)
+        "-i", str(input_path),
+        "-vn",  # drop any video stream
+        "-ac", "1",  # mono
+        "-ar", "16000",  # 16 kHz
+        "-c:a", "pcm_s16le",  # 16-bit PCM
+        "-f", "wav",
+        str(output_path),
+    ]
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=1800,  # generous: long footage on CPU
+        shell=False,  # explicit — never True
+    )
+    result.check_returncode()

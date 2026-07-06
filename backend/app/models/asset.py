@@ -43,4 +43,12 @@ class Asset(SQLModel, table=True):
     height: Optional[int] = Field(default=None)
     fps: Optional[float] = Field(default=None)
 
+    # VAD stats (filled by Phase 2 pipeline)
+    speech_ratio: Optional[float] = Field(default=None)  # 0..1 fraction of speech
+    vad_segment_count: Optional[int] = Field(default=None)
+
+    # Derived artifacts (paths under STORAGE_ROOT, server-generated)
+    audio_path: Optional[str] = Field(default=None)  # extracted mono 16k WAV
+    waveform_path: Optional[str] = Field(default=None)  # peaks JSON
+
     created_at: datetime = Field(default_factory=_utcnow)
