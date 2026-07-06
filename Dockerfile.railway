@@ -1,0 +1,53 @@
+# Dockerfile.railway — single-container deployment (API + RQ worker).
+#
+# Railway volumes are per-service, so the backend and worker — which share
+# STORAGE_ROOT on disk — run together in one container here. Local dev keeps
+# the two-service split in docker-compose.yml; this file is Railway-only.
+#
+# Build context: repo root (needs backend/ + scripts/ + fixtures/).
+
+FROM python:3.11-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg curl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY backend/pyproject.toml ./
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir \
+        "fastapi==0.115.5" \
+        "uvicorn[standard]==0.32.1" \
+        "sqlmodel==0.0.22" \
+        "psycopg[binary]==3.2.3" \
+        "pgvector==0.3.6" \
+        "redis==5.2.0" \
+        "rq==2.0.0" \
+        "faster-whisper==1.1.0" \
+        "sentence-transformers==3.3.1" \
+        "python-multipart==0.0.18" \
+        "pydantic-settings==2.6.1"
+
+COPY backend/app/ ./app/
+COPY scripts/ ./scripts/
+COPY fixtures/ ./fixtures/
+
+ENV PYTHONPATH=/app
+
+COPY <<'EOF' /app/start_combined.sh
+#!/bin/sh
+# Start the RQ worker alongside the API. If either process dies, the
+# container exits and Railway restarts it.
+set -e
+python -m app.workers.run_worker &
+WORKER_PID=$!
+uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" &
+API_PID=$!
+trap 'kill $WORKER_PID $API_PID 2>/dev/null' TERM INT
+wait -n
+exit 1
+EOF
+RUN chmod +x /app/start_combined.sh
+
+CMD ["/bin/bash", "/app/start_combined.sh"]
