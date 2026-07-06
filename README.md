@@ -1,5 +1,8 @@
 # SuoraFlow
 
+[![CI](https://github.com/Nikhilrangaa/suoraflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Nikhilrangaa/suoraflow/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-6366f1.svg)](LICENSE)
+
 **AI-assisted footage search for video editors.** Upload raw audio/video, let a
 local pipeline understand the speech in it, then search your footage by
 *meaning* — "the part where they talk about the budget" — and assemble the hits
