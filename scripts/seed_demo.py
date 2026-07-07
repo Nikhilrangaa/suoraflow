@@ -24,6 +24,7 @@ from app.workers.queue import get_queue  # noqa: E402
 
 DEMO_PROJECT_NAME = "Demo — Mountain Documentary"
 FIXTURE = Path("/app/fixtures/demo_interview.wav")
+BROLL_FIXTURE = Path("/app/fixtures/demo_broll.mp4")  # silent — visual search demo
 
 
 def main() -> int:
@@ -44,36 +45,45 @@ def main() -> int:
 
         project = Project(
             name=DEMO_PROJECT_NAME,
-            description="Seeded demo: a two-voice narration about a mountain "
-            "expedition. Try searching for “drone footage of the sunrise” or "
-            "“discussion about the budget”.",
+            description="Seeded demo: a narrated mountain expedition plus silent "
+            "b-roll. Try “discussion about the budget” (spoken match) or "
+            "“an orange sunset sky” (visual match — no speech needed).",
         )
         session.add(project)
         session.commit()
         session.refresh(project)
 
-        asset_id = generate_asset_id()
-        dest = safe_asset_path(settings.storage_root, project.id, asset_id, ".wav")
-        shutil.copyfile(FIXTURE, dest)
+        seeds = [
+            (FIXTURE, "demo_interview.wav", "audio", ".wav"),
+            (BROLL_FIXTURE, "demo_broll.mp4", "video", ".mp4"),
+        ]
+        for src, display_name, media_type, ext in seeds:
+            if not src.exists():
+                print(f"[seed_demo] Skipping missing fixture: {src}", file=sys.stderr)
+                continue
+            asset_id = generate_asset_id()
+            dest = safe_asset_path(settings.storage_root, project.id, asset_id, ext)
+            shutil.copyfile(src, dest)
 
-        asset = Asset(
-            id=asset_id,
-            project_id=project.id,
-            original_filename="demo_interview.wav",
-            stored_path=str(dest),
-            media_type="audio",
-            ext=".wav",
-            size_bytes=dest.stat().st_size,
-            status="uploaded",
-        )
-        session.add(asset)
-        session.commit()
+            asset = Asset(
+                id=asset_id,
+                project_id=project.id,
+                original_filename=display_name,
+                stored_path=str(dest),
+                media_type=media_type,
+                ext=ext,
+                size_bytes=dest.stat().st_size,
+                status="uploaded",
+            )
+            session.add(asset)
+            session.commit()
 
-        get_queue().enqueue(
-            "app.workers.tasks.process_asset", asset_id, job_timeout=3 * 60 * 60
-        )
+            get_queue().enqueue(
+                "app.workers.tasks.process_asset", asset_id, job_timeout=3 * 60 * 60
+            )
+            print(f"[seed_demo] Seeded {display_name} (asset {asset_id})")
+
         print(f"[seed_demo] Created project '{DEMO_PROJECT_NAME}' (id={project.id})")
-        print(f"[seed_demo] Enqueued pipeline for asset {asset_id}.")
         print("[seed_demo] Open http://localhost:5173 and watch it process.")
         return 0
 

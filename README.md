@@ -66,15 +66,17 @@ docker compose run --rm worker python scripts/warm_models.py   # optional pre-wa
 docker compose run --rm backend python scripts/seed_demo.py
 ```
 
-This seeds a demo project with a committed 31-second narration clip and runs it
-through the full pipeline. Then, in the UI:
+This seeds a demo project with a committed 31-second narration clip plus a
+silent b-roll video, and runs both through the full pipeline. Then, in the UI:
 
-1. Open **Demo — Mountain Documentary** and watch the status badge move through
+1. Open **Demo — Mountain Documentary** and watch the status badges move through
    `probing → extracting audio → detecting speech → transcribing → indexing → ready`.
-2. Click the asset: player, waveform, audio metadata, and the transcript.
-3. Back on the project page, search **“drone footage of the sunrise”** or
-   **“discussion about the budget”** — results are semantic, not keyword.
-4. Click **+ Timeline** on a result, reorder clips, then **Export CSV**.
+2. Click the audio asset: player, waveform, audio metadata, and the transcript.
+3. Back on the project page, search **“discussion about the budget”** — a
+   *spoken* match with a ranked transcript chunk.
+4. Search **“an orange sunset sky”** — a *visual* match: CLIP finds the scene
+   in the silent b-roll from what's on screen, no speech needed.
+5. Click **+ Timeline** on a result, reorder clips, then **Export CSV**.
 
 ## Architecture
 
