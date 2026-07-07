@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _whisper_model: Optional[Any] = None
 _embedding_model: Optional[Any] = None
+_clip_model: Optional[Any] = None
 _diarization_pipeline: Optional[Any] = None
 _diarization_failed = False
 
@@ -50,6 +51,18 @@ def get_embedding_model():
         logger.info("Loading sentence-transformers model=%s", settings.embedding_model)
         _embedding_model = SentenceTransformer(settings.embedding_model, device="cpu")
     return _embedding_model
+
+
+def get_clip_model():
+    """Return the cached CLIP model (image + text encoders in one vector space)."""
+    global _clip_model
+    if _clip_model is None:
+        settings = get_settings()
+        from sentence_transformers import SentenceTransformer
+
+        logger.info("Loading CLIP model=%s", settings.clip_model)
+        _clip_model = SentenceTransformer(settings.clip_model, device="cpu")
+    return _clip_model
 
 
 def get_diarization_pipeline():

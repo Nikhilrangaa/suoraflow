@@ -77,9 +77,19 @@ export interface SearchResult {
   score: number;
 }
 
+export interface VisualSearchResult {
+  asset_id: string;
+  asset_filename: string;
+  frame_id: string;
+  frame_index: number;
+  timestamp: number;
+  score: number;
+}
+
 export interface SearchResponse {
   query: string;
   results: SearchResult[];
+  visual_results: VisualSearchResult[];
   total: number;
 }
 
@@ -221,6 +231,8 @@ export const api = {
     waveform: (id: string): Promise<Waveform> =>
       request<Waveform>(`/api/assets/${id}/waveform`),
     mediaUrl: (id: string): string => `${API_BASE}/api/assets/${id}/media`,
+    frameUrl: (id: string, frameIndex: number): string =>
+      `${API_BASE}/api/assets/${id}/frames/${frameIndex}`,
     delete: (id: string): Promise<void> =>
       request<void>(`/api/assets/${id}`, { method: "DELETE" }),
   },

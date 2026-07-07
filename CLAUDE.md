@@ -31,6 +31,8 @@ features must degrade gracefully when their tokens are absent.
 - **Diarization (optional):** `pyannote.audio`, gated on `HF_TOKEN`. If absent, label all
   segments "Speaker 1" and continue — never fail the pipeline.
 - **Text embeddings:** `sentence-transformers` `all-MiniLM-L6-v2` (384-dim).
+- **Visual search:** CLIP `clip-ViT-B-32` via sentence-transformers (512-dim);
+  frames sampled ~1 per 2.5 s (capped at 240/asset) during `indexing_visuals`.
 - **Storage:** local filesystem under `STORAGE_ROOT`, mounted as a Docker volume.
 
 ## Repository layout
@@ -74,7 +76,9 @@ hot-reloads. Schema changes on existing volumes go through the idempotent
 `process_asset(asset_id)` runs in the **worker**, never in the request lifecycle. It moves
 the asset through these statuses, persisting after each step so the UI can poll:
 
-`uploaded → probing → extracting_audio → vad → transcribing → diarizing → chunking → embedding → ready` (or `failed`).
+`uploaded → probing → extracting_audio → vad → transcribing → diarizing → chunking → embedding → indexing_visuals → ready` (or `failed`).
+Videos without an audio track skip the audio steps but still get the visual
+index; audio-only assets skip `indexing_visuals`.
 
 1. **probe** — `ffprobe` JSON: duration, width, height, fps, codec, **audio sample rate,
    channels, codec**. Persist all audio fields; the UI surfaces them.
@@ -121,11 +125,12 @@ A phase is DONE only when ALL hold:
 
 ## Build status
 
-Phases 0–5 are complete: scaffold, projects + safe upload, the full audio
+Phases 0–6 are complete: scaffold, projects + safe upload, the full audio
 pipeline (probe → extract → VAD → transcribe → diarize → chunk → embed) with
 live status, semantic search over pgvector (HNSW), clips + rough-cut timeline
-with JSON/CSV export, and the seeded demo. Deferred stubs remain:
-`visual_search_service.py`, `rough_cut_service.py`.
+with JSON/CSV export, the seeded demo, and CLIP visual search (frame sampling
++ image embeddings + a "visual matches" section in search). Deferred stub:
+`rough_cut_service.py`.
 
 ## Working agreements
 

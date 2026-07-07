@@ -10,6 +10,7 @@ const PROCESSING = new Set([
   "diarizing",
   "chunking",
   "embedding",
+  "indexing_visuals",
 ]);
 
 export function isProcessing(status: string): boolean {
@@ -25,6 +26,7 @@ const LABELS: Record<string, string> = {
   diarizing: "identifying speakers",
   chunking: "chunking",
   embedding: "indexing",
+  indexing_visuals: "indexing visuals",
   ready: "ready",
   failed: "failed",
 };

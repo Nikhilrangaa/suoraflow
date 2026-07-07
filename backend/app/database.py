@@ -41,6 +41,8 @@ _MIGRATIONS = [
     # that grows row by row (no training step, no recall cliff when small).
     "CREATE INDEX IF NOT EXISTS ix_text_embedding_embedding "
     "ON text_embedding USING hnsw (embedding vector_cosine_ops)",
+    "CREATE INDEX IF NOT EXISTS ix_frame_embedding_embedding "
+    "ON frame_embedding USING hnsw (embedding vector_cosine_ops)",
 ]
 
 

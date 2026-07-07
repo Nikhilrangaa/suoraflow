@@ -4,7 +4,7 @@
  * at that moment.
  */
 import { useState } from "react";
-import { api, SearchResult } from "../lib/api";
+import { api, SearchResult, VisualSearchResult } from "../lib/api";
 
 interface SearchPanelProps {
   projectId: string;
@@ -27,6 +27,7 @@ export default function SearchPanel({
 }: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [visualResults, setVisualResults] = useState<VisualSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,10 +39,14 @@ export default function SearchPanel({
     setError(null);
     api.projects
       .search(projectId, q)
-      .then((res) => setResults(res.results))
+      .then((res) => {
+        setResults(res.results);
+        setVisualResults(res.visual_results ?? []);
+      })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Search failed");
         setResults(null);
+        setVisualResults([]);
       })
       .finally(() => setSearching(false));
   };
@@ -78,11 +83,15 @@ export default function SearchPanel({
 
       {results !== null && (
         <div className="mt-4">
-          {results.length === 0 ? (
+          {results.length === 0 && visualResults.length === 0 ? (
             <p className="text-sm text-gray-400">
               No matches. Try different phrasing — search is semantic, not keyword-based.
             </p>
-          ) : (
+          ) : results.length === 0 ? null : (
+            <>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Spoken matches
+            </h3>
             <ul className="space-y-2">
               {results.map((r, i) => (
                 <li
@@ -122,6 +131,47 @@ export default function SearchPanel({
                 </li>
               ))}
             </ul>
+            </>
+          )}
+
+          {/* Visual matches — CLIP over sampled frames (what's ON SCREEN) */}
+          {visualResults.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Visual matches
+                <span className="ml-2 font-normal normal-case text-gray-400">
+                  what&apos;s on screen, no speech needed
+                </span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {visualResults.map((v) => (
+                  <button
+                    key={v.frame_id}
+                    onClick={() => onOpenResult(v.asset_id, v.timestamp)}
+                    className="group text-left rounded-lg border border-gray-100 hover:border-indigo-300 overflow-hidden transition-colors"
+                    title={`${v.asset_filename} at ${formatTime(v.timestamp)}`}
+                  >
+                    <img
+                      src={api.assets.frameUrl(v.asset_id, v.frame_index)}
+                      alt={`Frame at ${formatTime(v.timestamp)}`}
+                      loading="lazy"
+                      className="w-full aspect-video object-cover bg-gray-100"
+                    />
+                    <div className="px-2 py-1.5 flex items-center justify-between text-xs">
+                      <span className="font-mono text-indigo-600">
+                        {formatTime(v.timestamp)}
+                      </span>
+                      <span
+                        className="bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5 font-medium"
+                        title="CLIP similarity"
+                      >
+                        {(v.score * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}

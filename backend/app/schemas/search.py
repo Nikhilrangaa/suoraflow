@@ -26,7 +26,19 @@ class SearchResult(BaseModel):
     score: float  # cosine similarity, higher is better
 
 
+class VisualSearchResult(BaseModel):
+    """A sampled video frame that visually matches the query (CLIP)."""
+
+    asset_id: str
+    asset_filename: str
+    frame_id: str
+    frame_index: int
+    timestamp: float  # seconds into the asset
+    score: float  # CLIP cosine similarity — scores run lower than speech scores
+
+
 class SearchResponse(BaseModel):
     query: str
-    results: list[SearchResult]
+    results: list[SearchResult]  # spoken-word matches (transcript chunks)
+    visual_results: list[VisualSearchResult] = []  # what's on screen (CLIP)
     total: int

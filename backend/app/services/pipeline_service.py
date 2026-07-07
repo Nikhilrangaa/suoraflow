@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.config import get_settings
-from app.utils.ffmpeg import extract_audio_wav, run_ffprobe
+from app.utils.ffmpeg import extract_audio_wav, extract_frames, run_ffprobe
 from app.utils.waveform import write_waveform_json
 
 logger = logging.getLogger(__name__)
@@ -268,3 +268,84 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     model = get_embedding_model()
     vectors = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
     return [v.tolist() for v in vectors]
+
+
+# ---------------------------------------------------------------------------
+# Step 8 — visual indexing (video assets only)
+# ---------------------------------------------------------------------------
+
+_MIN_FRAME_INTERVAL_S = 2.5
+_MAX_FRAMES_PER_ASSET = 240
+_CLIP_BATCH = 16
+
+
+@dataclass
+class SampledFrame:
+    frame_index: int
+    timestamp: float
+    path: Path
+
+
+def frames_dir(project_id: str, asset_id: str) -> Path:
+    """Server-generated frames directory for an asset."""
+    settings = get_settings()
+    return Path(settings.storage_root) / "frames" / project_id / asset_id
+
+
+def frame_sample_interval(duration: Optional[float]) -> float:
+    """
+    One frame every 2.5 s, stretched so long footage caps at ~240 frames.
+    Clamped to the clip duration — ffmpeg's fps filter fails when the
+    sampling period exceeds the whole input.
+    """
+    if not duration or duration <= 0:
+        return _MIN_FRAME_INTERVAL_S
+    interval = max(_MIN_FRAME_INTERVAL_S, duration / _MAX_FRAMES_PER_ASSET)
+    return round(max(0.5, min(interval, duration)), 3)
+
+
+def sample_frames(
+    stored_path: Path, out_dir: Path, duration: Optional[float]
+) -> list[SampledFrame]:
+    """Extract sampled frames and pair each with its mid-interval timestamp."""
+    interval = frame_sample_interval(duration)
+    paths = extract_frames(stored_path, out_dir, interval)
+    return [
+        SampledFrame(
+            frame_index=i,
+            # ffmpeg's fps filter grabs a frame per interval; the midpoint is
+            # a closer estimate of when the frame appears than the boundary.
+            timestamp=round(min(i * interval + interval / 2, duration or i * interval), 3),
+            path=p,
+        )
+        for i, p in enumerate(paths)
+    ]
+
+
+def embed_images(paths: list[Path]) -> list[list[float]]:
+    """Embed frame JPEGs with CLIP's image encoder (normalised, batched)."""
+    from PIL import Image
+
+    from app.services.ml_models import get_clip_model
+
+    if not paths:
+        return []
+    model = get_clip_model()
+    vectors: list[list[float]] = []
+    for i in range(0, len(paths), _CLIP_BATCH):
+        batch = []
+        for p in paths[i : i + _CLIP_BATCH]:
+            with Image.open(p) as img:
+                batch.append(img.convert("RGB"))
+        encoded = model.encode(batch, normalize_embeddings=True, show_progress_bar=False)
+        vectors.extend(v.tolist() for v in encoded)
+    return vectors
+
+
+def embed_query_clip(query: str) -> list[float]:
+    """Embed a text query with CLIP's text encoder (same space as frames)."""
+    from app.services.ml_models import get_clip_model
+
+    model = get_clip_model()
+    vec = model.encode([query], normalize_embeddings=True, show_progress_bar=False)[0]
+    return vec.tolist()

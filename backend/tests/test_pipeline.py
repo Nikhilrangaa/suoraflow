@@ -207,14 +207,26 @@ FAKE_TRANSCRIPT = TranscribeResult(
 )
 
 
+def _fake_image_vectors(paths):
+    """Synthetic 512-dim CLIP vectors — keeps tests free of model downloads."""
+    return [[1.0 if j == i else 0.0 for j in range(512)] for i in range(len(paths))]
+
+
 class TestProcessAsset:
     def test_full_pipeline_reaches_ready(self):
         mp4 = make_mp4(duration=2.0)
         asset = _upload_asset("Pipeline Ready", "clip.mp4", mp4.read_bytes())
         _cleanup(mp4)
 
-        with patch(
-            "app.services.pipeline_service.transcribe", return_value=FAKE_TRANSCRIPT
+        with (
+            patch(
+                "app.services.pipeline_service.transcribe",
+                return_value=FAKE_TRANSCRIPT,
+            ),
+            patch(
+                "app.services.pipeline_service.embed_images",
+                side_effect=_fake_image_vectors,
+            ),
         ):
             process_asset(asset["id"])
 
@@ -241,7 +253,13 @@ class TestProcessAsset:
         asset = _upload_asset("No Audio", "broll.mp4", mp4.read_bytes())
         _cleanup(mp4)
 
-        process_asset(asset["id"])  # no transcription mock needed — skips audio path
+        # No transcription mock needed — the audio path is skipped entirely;
+        # the visual index still runs (mocked CLIP).
+        with patch(
+            "app.services.pipeline_service.embed_images",
+            side_effect=_fake_image_vectors,
+        ):
+            process_asset(asset["id"])
 
         got = client.get(f"/api/assets/{asset['id']}").json()
         assert got["status"] == "ready"

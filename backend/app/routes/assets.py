@@ -37,6 +37,13 @@ def get_media(asset_id: str, session: SessionDep) -> FileResponse:
     return FileResponse(path, media_type=content_type)
 
 
+@router.get("/{asset_id}/frames/{frame_index}")
+def get_frame(asset_id: str, frame_index: int, session: SessionDep) -> FileResponse:
+    """Serve a sampled frame JPEG (visual search thumbnails)."""
+    path = asset_service.get_frame_path(session, asset_id, frame_index)
+    return FileResponse(path, media_type="image/jpeg")
+
+
 @router.delete("/{asset_id}", status_code=204)
 def delete_asset(asset_id: str, session: SessionDep) -> None:
     asset_service.delete_asset(session, asset_id)

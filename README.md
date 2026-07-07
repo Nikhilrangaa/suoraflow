@@ -34,6 +34,10 @@ ranked hit to a rough-cut timeline, then scrubbing the asset via its transcript.
 - **Semantic search** — query text is embedded with the same model and ranked
   by cosine similarity over an HNSW index; results are timestamped and
   click-to-seek.
+- **Visual search (CLIP)** — video frames are sampled during processing and
+  embedded with CLIP, so silent b-roll is searchable by what's *on screen*
+  ("sunset over the ridge"), not just what was said. Search returns spoken
+  matches and visual matches (with frame thumbnails) side by side.
 - **Rough-cut timeline** — add search hits as clips, reorder, remove, and
   export the cut as JSON or CSV (source file + in/out points per clip).
 - **Audio-first UI** — waveform rendered from server-computed peaks,
@@ -90,8 +94,9 @@ Browser ── Vite/React SPA
 
 - **Statuses are persisted after every pipeline step**, so the UI polls and
   shows live progress: `uploaded → probing → extracting_audio → vad →
-  transcribing → diarizing → chunking → embedding → ready` (or `failed` with a
-  short, safe error message).
+  transcribing → diarizing → chunking → embedding → indexing_visuals → ready`
+  (or `failed` with a short, safe error message). Videos without an audio
+  track skip the audio steps but still get a visual index.
 - **Uploads are never trusted**: UUID server-side filenames, extension
   allow-list **and** ffprobe content validation, streamed to disk with a size
   cap, media stored outside any web-served directory.
@@ -111,6 +116,7 @@ Browser ── Vite/React SPA
 | VAD | Silero (bundled with faster-whisper) |
 | Diarization | pyannote.audio 3.1 — optional, gated on `HF_TOKEN` |
 | Embeddings | sentence-transformers `all-MiniLM-L6-v2` (384-dim) |
+| Visual search | CLIP `clip-ViT-B-32` (512-dim, image + text encoders) |
 
 ## API surface
 
@@ -174,8 +180,8 @@ attributed to "Speaker 1".
 - Transcription runs at well above realtime on modern CPUs with the `base`
   model. For an interview-heavy project, `WHISPER_MODEL=small` is a good
   accuracy upgrade if you can spare the compute.
-- Video with no audio track (b-roll) is accepted and marked ready with an
-  empty transcript rather than failing.
+- Video with no audio track (b-roll) is accepted and still becomes searchable
+  through its visual index (CLIP frames) — it just has an empty transcript.
 - Long footage is safe: jobs have a 3-hour timeout and the pipeline persists
   progress step by step.
 

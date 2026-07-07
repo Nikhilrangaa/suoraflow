@@ -1,6 +1,7 @@
 """Asset service — safe upload, list, get, delete, transcript, media."""
 import json
 import logging
+import shutil
 import subprocess
 from pathlib import Path
 from typing import IO
@@ -211,6 +212,32 @@ def remove_asset_files(asset: Asset) -> None:
         _remove_file_safe(asset.audio_path)
     if asset.waveform_path:
         _remove_file_safe(asset.waveform_path)
+    # Sampled frames directory (visual index artifacts)
+    from app.services.pipeline_service import frames_dir
+
+    try:
+        d = frames_dir(asset.project_id, asset.id)
+        if d.is_dir():
+            shutil.rmtree(d)
+    except Exception as exc:
+        logger.warning("Could not remove frames dir for asset %s: %s", asset.id, exc)
+
+
+def get_frame_path(session: Session, asset_id: str, frame_index: int) -> Path:
+    """Return the JPEG path for a sampled frame; 404 if unknown or missing."""
+    from app.models.frame_embedding import FrameEmbedding
+
+    frame = session.exec(
+        select(FrameEmbedding)
+        .where(FrameEmbedding.asset_id == asset_id)
+        .where(FrameEmbedding.frame_index == frame_index)
+    ).first()
+    if frame is None:
+        raise HTTPException(status_code=404, detail="Frame not found")
+    path = Path(frame.frame_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Frame file not found on disk")
+    return path
 
 
 def get_transcript(session: Session, asset_id: str) -> TranscriptRead:

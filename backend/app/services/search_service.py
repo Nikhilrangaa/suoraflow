@@ -48,4 +48,18 @@ def search_project(
         )
         for chunk, asset, dist in rows
     ]
-    return SearchResponse(query=request.query, results=results, total=len(results))
+
+    # Visual matches (CLIP over sampled frames) are a separate ranked section:
+    # CLIP and MiniLM scores live in different spaces, so they are not fused.
+    from app.services import visual_search_service
+
+    visual_results = visual_search_service.search_frames(
+        session, project_id, request.query, request.limit
+    )
+
+    return SearchResponse(
+        query=request.query,
+        results=results,
+        visual_results=visual_results,
+        total=len(results) + len(visual_results),
+    )

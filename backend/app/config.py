@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Embeddings
     embedding_model: str = "all-MiniLM-L6-v2"
 
+    # Visual search (CLIP) — image + text encoders sharing one vector space
+    clip_model: str = "clip-ViT-B-32"
+
     # Diarization (optional) — empty string means disabled
     hf_token: str = ""
 

@@ -105,3 +105,30 @@ def extract_audio_wav(input_path: Path, output_path: Path) -> None:
         shell=False,  # explicit — never True
     )
     result.check_returncode()
+
+
+def extract_frames(input_path: Path, out_dir: Path, interval_s: float) -> list[Path]:
+    """
+    Sample one frame every *interval_s* seconds from *input_path* into
+    *out_dir* as JPEGs (frame_00001.jpg, ...). Returns the ordered frame paths.
+
+    Uses argument array only — never shell=True.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", str(input_path),
+        "-vf", f"fps=1/{interval_s},scale=336:-2",  # small: CLIP sees 224px
+        "-q:v", "4",  # visually fine for thumbnails, small on disk
+        str(out_dir / "frame_%05d.jpg"),
+    ]
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=1800,
+        shell=False,  # explicit — never True
+    )
+    result.check_returncode()
+    return sorted(out_dir.glob("frame_*.jpg"))

@@ -27,6 +27,7 @@ def warm_embeddings(model_name: str) -> None:
 if __name__ == "__main__":
     whisper_model = os.environ.get("WHISPER_MODEL", "base")
     embedding_model = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    clip_model = os.environ.get("CLIP_MODEL", "clip-ViT-B-32")
 
     try:
         warm_whisper(whisper_model)
@@ -38,6 +39,12 @@ if __name__ == "__main__":
         warm_embeddings(embedding_model)
     except Exception as exc:
         print(f"[warm] ERROR warming embeddings: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        warm_embeddings(clip_model)  # CLIP loads via sentence-transformers too
+    except Exception as exc:
+        print(f"[warm] ERROR warming CLIP: {exc}", file=sys.stderr)
         sys.exit(1)
 
     print("[warm] All models ready.")
