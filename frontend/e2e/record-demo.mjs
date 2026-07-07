@@ -1,24 +1,29 @@
 /**
  * record-demo.mjs — Record the SuoraFlow demo walkthrough as a video.
  *
- * Drives the seeded demo project through the real UI with deliberate pacing:
- * dashboard → project → semantic search → add to timeline → asset page
- * (waveform + transcript click-to-seek). Output: /tmp/suoraflow-demo/*.webm
+ * Drives a project of real NASA footage (public domain) through the UI with
+ * deliberate pacing: dashboard → project → spoken search → visual search
+ * (CLIP thumbnails) → click a visual hit → asset page seeked to that moment.
+ * Output: /tmp/suoraflow-demo/*.webm
  *
- * Usage: node e2e/record-demo.mjs   (stack must be up and demo seeded)
+ * Usage: node e2e/record-demo.mjs   (stack up; project named in PROJECT below)
  */
 import { chromium } from "@playwright/test";
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:5173";
 const OUT_DIR = "/tmp/suoraflow-demo";
+const PROJECT = process.env.DEMO_PROJECT ?? "Artemis I — Mission Cut";
+const SPOKEN_QUERY = process.env.SPOKEN_QUERY ?? "the most powerful rocket in the world";
+const VISUAL_QUERY = process.env.VISUAL_QUERY ?? "rocket lifting off with flames and smoke";
+
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Type like a human so the search query is readable in the recording. */
+/** Type like a human so the query is readable in the recording. */
 async function typeSlow(locator, text) {
   await locator.click();
   for (const ch of text) {
     await locator.press(ch === " " ? "Space" : ch);
-    await pause(35);
+    await pause(30);
   }
 }
 
@@ -31,35 +36,47 @@ const page = await context.newPage();
 
 // --- 1. Dashboard ----------------------------------------------------------
 await page.goto(APP_URL);
-await page.getByText("Demo — Mountain Documentary").waitFor();
-await pause(1800);
+await page.getByText(PROJECT).waitFor();
+await pause(1600);
 
-// --- 2. Open the demo project ---------------------------------------------
-await page.getByRole("button", { name: /Demo — Mountain Documentary/ }).click();
-await page.getByPlaceholder(/drone footage/).waitFor();
-await pause(1500);
-
-// --- 3. Semantic search -----------------------------------------------------
+// --- 2. Open the project ----------------------------------------------------
+await page.getByRole("button", { name: new RegExp(PROJECT) }).click();
 const searchBox = page.getByPlaceholder(/drone footage/);
-await typeSlow(searchBox, "drone footage of the sunrise");
-await pause(600);
-await searchBox.press("Enter");
-await page.locator("li").filter({ hasText: "%" }).first().waitFor({ timeout: 30_000 });
-await pause(2500);
+await searchBox.waitFor();
+await pause(1400);
 
-// --- 4. Add the top hit to the timeline ------------------------------------
+// --- 3. Spoken search --------------------------------------------------------
+await typeSlow(searchBox, SPOKEN_QUERY);
+await pause(400);
+await searchBox.press("Enter");
+await page.getByText("Spoken matches").waitFor({ timeout: 30_000 });
+await pause(2800);
+
+// --- 4. Add the top spoken hit to the timeline -------------------------------
 await page.getByRole("button", { name: "+ Timeline" }).first().click();
 await page.getByText(/Timeline — Rough Cut/).waitFor({ timeout: 15_000 });
-await pause(2200);
-
-// --- 5. Asset page: waveform + transcript -----------------------------------
-await page.getByRole("button", { name: /demo_interview\.wav ready/ }).click();
-await page.getByText("Media Info").waitFor({ timeout: 15_000 });
 await pause(2000);
 
-// Click a transcript segment → player seeks and plays, waveform follows
-await page.getByRole("button", { name: /drone footage of the Sunrise/i }).click();
-await pause(5000); // let the playhead visibly move across the waveform
+// --- 5. Visual search --------------------------------------------------------
+await searchBox.click();
+await searchBox.fill("");
+await typeSlow(searchBox, VISUAL_QUERY);
+await pause(400);
+await searchBox.press("Enter");
+await page.getByText("Visual matches").waitFor({ timeout: 30_000 });
+await pause(1500);
+// Bring the CLIP thumbnail grid fully into view
+await page.getByText("Visual matches").scrollIntoViewIfNeeded();
+await page.mouse.wheel(0, 170);
+await pause(3200);
+
+// --- 6. Click the top visual thumbnail → asset page at that timestamp --------
+await page
+  .locator("img[alt^='Frame at']")
+  .first()
+  .click();
+await page.getByText("Media Info").waitFor({ timeout: 15_000 });
+await pause(4500); // player seeked to the matched moment; waveform visible
 
 await context.close(); // flushes the video file
 await browser.close();

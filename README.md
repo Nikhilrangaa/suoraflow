@@ -20,10 +20,12 @@ model downloads.
 VAD → ASR → speaker diarization → chunking → embeddings → vector search → rough cut
 ```
 
-![SuoraFlow demo — semantic search over footage, timeline building, waveform + transcript](docs/demo.gif)
+![SuoraFlow demo — spoken and visual search over real NASA footage](docs/demo.gif)
 
-*Searching the seeded demo project for “drone footage of the sunrise”, adding the
-ranked hit to a rough-cut timeline, then scrubbing the asset via its transcript.*
+*Real footage (NASA Artemis I, public domain): a spoken search for “the most
+powerful rocket in the world” finds the narrated moment; a visual search for
+“rocket lifting off with flames and smoke” finds liftoff frames via CLIP —
+then a click on a thumbnail opens the asset seeked to that exact moment.*
 
 ## Highlights
 
