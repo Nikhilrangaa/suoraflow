@@ -119,6 +119,25 @@ export interface Timeline {
   total_duration: number;
 }
 
+export interface BeatMatch {
+  index: number;
+  beat_text: string;
+  matched: boolean;
+  source: "transcript" | "visual" | null;
+  asset_id: string | null;
+  asset_filename: string | null;
+  start: number | null;
+  end: number | null;
+  score: number | null;
+  method: "llm" | "embedding";
+}
+
+export interface RoughCutResponse {
+  timeline: Timeline;
+  beats: BeatMatch[];
+  method: "llm" | "embedding";
+}
+
 export interface HealthData {
   status: string;
   db: string;
@@ -200,6 +219,16 @@ export const api = {
       }),
     listTimelines: (id: string): Promise<Timeline[]> =>
       request<Timeline[]>(`/api/projects/${id}/timelines`),
+    generateRoughCut: (
+      id: string,
+      script: string,
+      name?: string,
+    ): Promise<RoughCutResponse> =>
+      request<RoughCutResponse>(`/api/projects/${id}/rough-cut`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(name ? { script, name } : { script }),
+      }),
   },
 
   timelines: {

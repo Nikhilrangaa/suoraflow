@@ -3,14 +3,28 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from app.database import SessionDep
+from app.schemas.rough_cut import RoughCutRequest, RoughCutResponse
 from app.schemas.timeline import (
     TimelineItemCreate,
     TimelineItemMove,
     TimelineRead,
 )
-from app.services import timeline_service
+from app.services import rough_cut_service, timeline_service
 
 router = APIRouter(prefix="/api/timelines", tags=["timelines"])
+
+# Rough-cut generation is project-scoped (POST /api/projects/{id}/rough-cut),
+# so it lives on its own router with the projects prefix. Registered in main.py.
+rough_cut_router = APIRouter(prefix="/api/projects", tags=["timelines"])
+
+
+@rough_cut_router.post(
+    "/{project_id}/rough-cut", response_model=RoughCutResponse, status_code=201
+)
+def generate_rough_cut(
+    project_id: str, data: RoughCutRequest, session: SessionDep
+) -> RoughCutResponse:
+    return rough_cut_service.generate_rough_cut(session, project_id, data)
 
 
 @router.get("/{timeline_id}", response_model=TimelineRead)

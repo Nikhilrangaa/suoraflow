@@ -125,12 +125,20 @@ A phase is DONE only when ALL hold:
 
 ## Build status
 
-Phases 0–6 are complete: scaffold, projects + safe upload, the full audio
+Phases 0–7 are complete: scaffold, projects + safe upload, the full audio
 pipeline (probe → extract → VAD → transcribe → diarize → chunk → embed) with
 live status, semantic search over pgvector (HNSW), clips + rough-cut timeline
-with JSON/CSV export, the seeded demo, and CLIP visual search (frame sampling
-+ image embeddings + a "visual matches" section in search). Deferred stub:
-`rough_cut_service.py`.
+with JSON/CSV export, the seeded demo, CLIP visual search (frame sampling
++ image embeddings + a "visual matches" section in search), and script-to-footage
+rough cut generation (`POST /api/projects/{id}/rough-cut`): a script is split
+into beats, each beat matched against transcript (MiniLM) and visual (CLIP)
+embeddings, optionally reranked with one Claude API call (`ANTHROPIC_API_KEY`,
+model from `RERANK_MODEL`, default `claude-opus-5`), and assembled into a
+Timeline of Clips with a per-beat match report. Absent key / any Claude
+failure ⇒ silent fallback to embedding-threshold selection (never fails the
+request). New env vars: `ANTHROPIC_API_KEY` (optional), `RERANK_MODEL`.
+New dependency: `anthropic` (imported lazily) — a dependency change, so it
+needs `docker compose build backend worker`, not just a restart.
 
 ## Working agreements
 

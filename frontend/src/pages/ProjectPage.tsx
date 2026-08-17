@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, Asset, Project } from "../lib/api";
 import StatusBadge, { isProcessing } from "../components/StatusBadge";
 import SearchPanel from "../components/SearchPanel";
+import RoughCutPanel from "../components/RoughCutPanel";
 import TimelinePanel, { TimelinePanelHandle } from "../components/TimelinePanel";
 
 // Extensions mirrored from backend allow-list
@@ -218,6 +219,15 @@ export default function ProjectPage({ projectId, onBack, onSelectAsset }: Projec
           hasReadyAssets={assets.some((a) => a.status === "ready")}
           onOpenResult={(assetId, t) => onSelectAsset(assetId, t)}
           onAddToTimeline={(result) => timelineRef.current?.addFromSearchResult(result)}
+        />
+
+        {/* Script-to-footage rough cut */}
+        <RoughCutPanel
+          projectId={projectId}
+          hasReadyAssets={assets.some((a) => a.status === "ready")}
+          onTimelineCreated={(timelineId) =>
+            timelineRef.current?.showTimeline(timelineId)
+          }
         />
 
         {/* Rough-cut timeline */}

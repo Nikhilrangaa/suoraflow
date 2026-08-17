@@ -42,6 +42,11 @@ then a click on a thumbnail opens the asset seeked to that exact moment.*
   matches and visual matches (with frame thumbnails) side by side.
 - **Rough-cut timeline** — add search hits as clips, reorder, remove, and
   export the cut as JSON or CSV (source file + in/out points per clip).
+- **Script-to-footage rough cut** — paste a script and each paragraph ("beat")
+  is matched to footage via the transcript and visual indexes, then assembled
+  into a timeline with a per-beat match report. With an `ANTHROPIC_API_KEY`
+  set, candidates are reranked by a single Claude call; without one it falls
+  back to pure embedding matching — the feature always works.
 - **Audio-first UI** — waveform rendered from server-computed peaks,
   sample rate / channels / codec surfaced per asset, live pipeline status,
   clickable transcript that follows playback.
@@ -134,6 +139,7 @@ GET    /api/assets/{id}/media                DELETE /api/assets/{id}
 POST   /api/projects/{id}/search             # {query, limit} → ranked chunks
 POST   /api/projects/{id}/clips              GET  /api/projects/{id}/clips
 POST   /api/projects/{id}/timelines          GET  /api/projects/{id}/timelines
+POST   /api/projects/{id}/rough-cut          # {script, name?, candidates_per_beat?}
 GET    /api/timelines/{id}
 POST   /api/timelines/{id}/items             PATCH  /api/timelines/{id}/items/{item_id}
 DELETE /api/timelines/{id}/items/{item_id}   GET  /api/timelines/{id}/export?format=json|csv
@@ -163,6 +169,8 @@ See `.env.example` for the full documented list. Key variables:
 | `MAX_UPLOAD_MB` | `500` | Upload size limit |
 | `WHISPER_MODEL` | `base` | faster-whisper size (`tiny`…`large-v3`) — bigger = better + slower |
 | `HF_TOKEN` | *(empty)* | HuggingFace token enabling pyannote speaker diarization; leave blank and all segments are labelled "Speaker 1" |
+| `ANTHROPIC_API_KEY` | *(empty)* | Anthropic key enabling Claude reranking for rough-cut generation; leave blank and rough cuts use embedding matching only |
+| `RERANK_MODEL` | `claude-opus-5` | Claude model used for the rough-cut rerank call |
 | `FRONTEND_URL` | `http://localhost:5173` | Allowed CORS origin (never a wildcard) |
 | `STORAGE_ROOT` | `/storage` | Media + derived artifacts volume |
 

@@ -18,6 +18,8 @@ dependencies = [
     "sentence-transformers==3.3.1",
     "python-multipart==0.0.18",
     "pydantic-settings==2.6.1",
+    # Rough-cut rerank (optional at runtime: imported lazily, key-gated)
+    "anthropic==0.116.0",
 ]
 
 [project.optional-dependencies]

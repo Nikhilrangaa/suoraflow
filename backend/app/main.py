@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(projects.router)
     app.include_router(assets.router)
     app.include_router(timelines.router)
+    app.include_router(timelines.rough_cut_router)
 
     return app
 

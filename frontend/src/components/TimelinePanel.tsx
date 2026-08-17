@@ -9,6 +9,8 @@ import { api, SearchResult, Timeline } from "../lib/api";
 
 export interface TimelinePanelHandle {
   addFromSearchResult: (result: SearchResult) => void;
+  /** Load and display a specific timeline (e.g. a freshly generated rough cut). */
+  showTimeline: (timelineId: string) => void;
 }
 
 interface TimelinePanelProps {
@@ -69,6 +71,20 @@ const TimelinePanel = forwardRef<TimelinePanelHandle, TimelinePanelProps>(
         })()
           .catch((err: unknown) =>
             setError(err instanceof Error ? err.message : "Failed to add clip"),
+          )
+          .finally(() => setBusy(false));
+      },
+      showTimeline: (timelineId: string) => {
+        setBusy(true);
+        setError(null);
+        api.timelines
+          .get(timelineId)
+          .then((tl) => {
+            setTimeline(tl);
+            flashNotice("Rough cut added as a new timeline");
+          })
+          .catch((err: unknown) =>
+            setError(err instanceof Error ? err.message : "Failed to load timeline"),
           )
           .finally(() => setBusy(false));
       },

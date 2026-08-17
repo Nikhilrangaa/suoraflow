@@ -16,26 +16,24 @@ from app.schemas.search import SearchRequest, SearchResponse, SearchResult
 from app.services.pipeline_service import embed_texts
 
 
-def search_project(
-    session: Session, project_id: str, request: SearchRequest
-) -> SearchResponse:
-    """Rank the project's transcript chunks by similarity to the query."""
-    project = session.get(Project, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+def rank_chunks_by_vector(
+    session: Session, project_id: str, query_vec: list[float], limit: int
+) -> list[SearchResult]:
+    """Rank a project's transcript chunks by cosine similarity to a query vector.
 
-    query_vec = embed_texts([request.query])[0]
-
+    Shared by text search (which embeds the query first) and rough-cut
+    generation (which embeds all script beats in one batch).
+    """
     distance = TextEmbedding.embedding.cosine_distance(query_vec)  # type: ignore[attr-defined]
     rows = session.exec(
         select(TextEmbedding, Asset, distance.label("distance"))
         .join(Asset, Asset.id == TextEmbedding.asset_id)  # type: ignore[arg-type]
         .where(Asset.project_id == project_id)
         .order_by(distance)
-        .limit(request.limit)
+        .limit(limit)
     ).all()
 
-    results = [
+    return [
         SearchResult(
             asset_id=asset.id,
             asset_filename=asset.original_filename,
@@ -48,6 +46,18 @@ def search_project(
         )
         for chunk, asset, dist in rows
     ]
+
+
+def search_project(
+    session: Session, project_id: str, request: SearchRequest
+) -> SearchResponse:
+    """Rank the project's transcript chunks by similarity to the query."""
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    query_vec = embed_texts([request.query])[0]
+    results = rank_chunks_by_vector(session, project_id, query_vec, request.limit)
 
     # Visual matches (CLIP over sampled frames) are a separate ranked section:
     # CLIP and MiniLM scores live in different spaces, so they are not fused.

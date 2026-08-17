@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Diarization (optional) — empty string means disabled
     hf_token: str = ""
 
+    # Rough-cut LLM rerank (optional) — empty key means embedding-only selection
+    anthropic_api_key: str = ""
+    rerank_model: str = "claude-opus-5"
+
 
 @lru_cache
 def get_settings() -> Settings:
