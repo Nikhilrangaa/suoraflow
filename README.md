@@ -20,12 +20,13 @@ model downloads.
 VAD → ASR → speaker diarization → chunking → embeddings → vector search → rough cut
 ```
 
-![SuoraFlow demo — spoken and visual search over real NASA footage](docs/demo.gif)
+![SuoraFlow demo — search and script-to-footage rough cut over real NASA footage](docs/demo.gif)
 
-*Real footage (NASA Artemis I, public domain): a spoken search for “the most
-powerful rocket in the world” finds the narrated moment; a visual search for
-“rocket lifting off with flames and smoke” finds liftoff frames via CLIP —
-then a click on a thumbnail opens the asset seeked to that exact moment.*
+*Real footage (NASA Artemis I, public domain): a spoken search finds the
+narrated moment; a visual search finds liftoff frames via CLIP and a click
+opens the asset seeked to that exact second; then a pasted four-beat script
+is matched to footage — including a silent tracking clip matched purely by
+what's on screen — and assembled into an exportable rough-cut timeline.*
 
 ## Highlights
 
